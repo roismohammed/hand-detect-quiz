@@ -1,19 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Loader2, Trophy, RotateCcw, Hand, AlertCircle } from "lucide-react";
-import { questions, Question } from "@/data/questions";
-import { useHandDetection, HandPosition } from "@/hooks/useHandDetection";
+import { questions } from "@/data/questions";
+import { useHandDetection } from "@/hooks/useHandDetection";
 import OptionCard from "./OptionCard";
-import HandCursor from "./HandCursor";
 
 type OptionState = "default" | "correct" | "wrong";
 
-// Instant selection when hand hovers over an option
+const FINGER_LABELS = ["", "A", "B", "C", "D"]; // 1-4 fingers
 
 const QuizScreen = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { handPosition, isLoading, error } = useHandDetection(videoRef);
+  const { detection, isLoading, error } = useHandDetection(videoRef);
 
   const [currentQ, setCurrentQ] = useState(0);
   const [score, setScore] = useState(0);
@@ -22,51 +20,29 @@ const QuizScreen = () => {
   const [answered, setAnswered] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
-  
 
   const question = questions[currentQ];
 
-  // Detect which option the hand is hovering over
-  const getHoveredOption = useCallback(
-    (pos: HandPosition): number | null => {
-      if (!pos.visible || !containerRef.current) return null;
-
-      // The hand position is relative to the video (mirrored)
-      // Map x: 0-1 to the quiz area. We split into a 2x2 grid for 4 options
-      const mirroredX = 1 - pos.x; // Mirror since webcam is mirrored
-      const y = pos.y;
-
-      // Options are in a 2-column grid
-      // Top-left: 0, Top-right: 1, Bottom-left: 2, Bottom-right: 3
-      if (y < 0.15 || y > 0.95) return null;
-      if (mirroredX < 0.05 || mirroredX > 0.95) return null;
-
-      const col = mirroredX < 0.5 ? 0 : 1;
-      const row = y < 0.5 ? 0 : 1;
-      return row * 2 + col;
-    },
-    []
-  );
-
-  // Handle hover detection - instant selection
+  // Detect finger count and select answer
   const lastSelectedRef = useRef<number | null>(null);
-  
+
   useEffect(() => {
     if (answered) return;
 
-    const option = getHoveredOption(handPosition);
-    setHoveredOption(option);
+    if (detection.visible && detection.fingerCount >= 1 && detection.fingerCount <= 4) {
+      const optionIndex = detection.fingerCount - 1; // 1 finger = index 0 (A), etc.
+      setHoveredOption(optionIndex);
 
-    if (option !== null && lastSelectedRef.current !== option) {
-      lastSelectedRef.current = option;
-      handleAnswer(option);
-    }
-    
-    if (!handPosition.visible) {
+      if (lastSelectedRef.current !== optionIndex) {
+        lastSelectedRef.current = optionIndex;
+        // Small delay to let user see the highlight before selecting
+        setTimeout(() => handleAnswer(optionIndex), 800);
+      }
+    } else {
+      setHoveredOption(null);
       lastSelectedRef.current = null;
     }
-  }, [handPosition, answered, getHoveredOption]);
-
+  }, [detection, answered]);
 
   const handleAnswer = (index: number) => {
     if (answered) return;
@@ -91,6 +67,7 @@ const QuizScreen = () => {
         setAnswered(false);
         setShowExplanation(false);
         setHoveredOption(null);
+        lastSelectedRef.current = null;
       } else {
         setShowResult(true);
       }
@@ -105,7 +82,7 @@ const QuizScreen = () => {
     setShowResult(false);
     setShowExplanation(false);
     setHoveredOption(null);
-    
+    lastSelectedRef.current = null;
   };
 
   if (showResult) {
@@ -150,7 +127,7 @@ const QuizScreen = () => {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 flex flex-col" ref={containerRef}>
+    <div className="min-h-screen p-4 md:p-8 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -194,14 +171,16 @@ const QuizScreen = () => {
             style={{ transform: "scaleX(-1)" }}
           />
 
-          {/* Hand cursor overlay */}
-          <HandCursor
-            x={1 - handPosition.x}
-            y={handPosition.y}
-            visible={handPosition.visible}
-            isHovering={hoveredOption !== null}
-          />
-
+          {/* Finger count indicator */}
+          {detection.visible && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-6 py-3">
+              <span className="font-display font-bold text-foreground text-lg">
+                {detection.fingerCount === 0
+                  ? "✊ Kepal"
+                  : `${detection.fingerCount} Jari → ${FINGER_LABELS[detection.fingerCount] || ""}`}
+              </span>
+            </div>
+          )}
 
           {/* Loading overlay */}
           {isLoading && (
@@ -228,7 +207,7 @@ const QuizScreen = () => {
           <div className="absolute top-4 left-4 glass-card rounded-xl px-3 py-1.5 flex items-center gap-2">
             <Camera className="w-4 h-4 text-primary" />
             <span className="text-xs font-body text-foreground">
-              {handPosition.visible ? "Tangan Terdeteksi ✓" : "Arahkan Tangan"}
+              {detection.visible ? "Tangan Terdeteksi ✓" : "Tunjukkan Tangan"}
             </span>
           </div>
         </div>
@@ -284,7 +263,7 @@ const QuizScreen = () => {
           {/* Instructions */}
           <div className="text-center">
             <p className="text-sm text-muted-foreground font-body">
-              👆 Arahkan jari telunjuk ke jawaban untuk memilih langsung, atau klik manual
+              ☝️ 1 jari = A &nbsp;|&nbsp; ✌️ 2 jari = B &nbsp;|&nbsp; 🤟 3 jari = C &nbsp;|&nbsp; 🖐️ 4 jari = D
             </p>
           </div>
         </div>

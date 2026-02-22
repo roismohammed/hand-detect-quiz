@@ -2,16 +2,29 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Hands, Results } from "@mediapipe/hands";
 import { Camera } from "@mediapipe/camera_utils";
 
-export interface HandPosition {
-  x: number;
-  y: number;
+export interface HandDetectionResult {
+  fingerCount: number; // 0-5
   visible: boolean;
 }
 
+// Finger tip and PIP landmark indices
+const FINGER_TIPS = [8, 12, 16, 20]; // index, middle, ring, pinky
+const FINGER_PIPS = [6, 10, 14, 18];
+
+function countRaisedFingers(landmarks: { x: number; y: number; z: number }[]): number {
+  let count = 0;
+  // For index, middle, ring, pinky: tip y < pip y means raised (y goes down)
+  for (let i = 0; i < FINGER_TIPS.length; i++) {
+    if (landmarks[FINGER_TIPS[i]].y < landmarks[FINGER_PIPS[i]].y) {
+      count++;
+    }
+  }
+  return count;
+}
+
 export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
-  const [handPosition, setHandPosition] = useState<HandPosition>({
-    x: 0,
-    y: 0,
+  const [detection, setDetection] = useState<HandDetectionResult>({
+    fingerCount: 0,
     visible: false,
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -21,15 +34,11 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
 
   const onResults = useCallback((results: Results) => {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      // Use index finger tip (landmark 8)
-      const indexFingerTip = results.multiHandLandmarks[0][8];
-      setHandPosition({
-        x: indexFingerTip.x,
-        y: indexFingerTip.y,
-        visible: true,
-      });
+      const landmarks = results.multiHandLandmarks[0];
+      const fingerCount = countRaisedFingers(landmarks);
+      setDetection({ fingerCount, visible: true });
     } else {
-      setHandPosition((prev) => ({ ...prev, visible: false }));
+      setDetection((prev) => ({ ...prev, visible: false }));
     }
   }, []);
 
@@ -81,5 +90,5 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
     };
   }, [videoRef, onResults]);
 
-  return { handPosition, isLoading, error };
+  return { detection, isLoading, error };
 }
