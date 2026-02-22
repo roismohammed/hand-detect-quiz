@@ -8,7 +8,7 @@ import HandCursor from "./HandCursor";
 
 type OptionState = "default" | "correct" | "wrong";
 
-const HOVER_THRESHOLD = 1.5; // seconds to confirm selection
+// Instant selection when hand hovers over an option
 
 const QuizScreen = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -19,11 +19,10 @@ const QuizScreen = () => {
   const [score, setScore] = useState(0);
   const [optionStates, setOptionStates] = useState<OptionState[]>(["default", "default", "default", "default"]);
   const [hoveredOption, setHoveredOption] = useState<number | null>(null);
-  const [hoverTimer, setHoverTimer] = useState(0);
   const [answered, setAnswered] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
-  const timerRef = useRef<number | null>(null);
+  
 
   const question = questions[currentQ];
 
@@ -49,52 +48,29 @@ const QuizScreen = () => {
     []
   );
 
-  // Handle hover detection and timer
+  // Handle hover detection - instant selection
+  const lastSelectedRef = useRef<number | null>(null);
+  
   useEffect(() => {
     if (answered) return;
 
     const option = getHoveredOption(handPosition);
     setHoveredOption(option);
 
-    if (option !== null) {
-      if (timerRef.current === null) {
-        const startTime = Date.now();
-        const interval = window.setInterval(() => {
-          const elapsed = (Date.now() - startTime) / 1000;
-          setHoverTimer(elapsed);
-          if (elapsed >= HOVER_THRESHOLD) {
-            clearInterval(interval);
-            timerRef.current = null;
-            handleAnswer(option);
-          }
-        }, 50);
-        timerRef.current = interval;
-      }
-    } else {
-      if (timerRef.current !== null) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-        setHoverTimer(0);
-      }
+    if (option !== null && lastSelectedRef.current !== option) {
+      lastSelectedRef.current = option;
+      handleAnswer(option);
     }
-
-    return () => {
-      // Don't clear on every render, only when answered changes
-    };
+    
+    if (!handPosition.visible) {
+      lastSelectedRef.current = null;
+    }
   }, [handPosition, answered, getHoveredOption]);
 
-  // Clean up timer on answer
-  useEffect(() => {
-    if (answered && timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  }, [answered]);
 
   const handleAnswer = (index: number) => {
     if (answered) return;
     setAnswered(true);
-    setHoverTimer(0);
 
     const isCorrect = index === question.correctIndex;
     const newStates: OptionState[] = question.options.map((_, i) => {
@@ -129,7 +105,7 @@ const QuizScreen = () => {
     setShowResult(false);
     setShowExplanation(false);
     setHoveredOption(null);
-    setHoverTimer(0);
+    
   };
 
   if (showResult) {
@@ -226,24 +202,6 @@ const QuizScreen = () => {
             isHovering={hoveredOption !== null}
           />
 
-          {/* Hover progress indicator */}
-          {hoveredOption !== null && !answered && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-6 py-2">
-              <div className="flex items-center gap-3">
-                <div className="w-32 bg-muted rounded-full h-2">
-                  <motion.div
-                    className="bg-primary h-2 rounded-full"
-                    style={{
-                      width: `${(hoverTimer / HOVER_THRESHOLD) * 100}%`,
-                    }}
-                  />
-                </div>
-                <span className="text-sm font-body text-muted-foreground">
-                  Memilih...
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Loading overlay */}
           {isLoading && (
@@ -326,7 +284,7 @@ const QuizScreen = () => {
           {/* Instructions */}
           <div className="text-center">
             <p className="text-sm text-muted-foreground font-body">
-              👆 Arahkan jari telunjuk ke jawaban dan tahan {HOVER_THRESHOLD} detik untuk memilih, atau klik langsung
+              👆 Arahkan jari telunjuk ke jawaban untuk memilih langsung, atau klik manual
             </p>
           </div>
         </div>
