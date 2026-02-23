@@ -20,6 +20,7 @@ const QuizScreen = () => {
   const [answered, setAnswered] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
 
   const question = questions[currentQ];
 
@@ -27,7 +28,7 @@ const QuizScreen = () => {
   const lastSelectedRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (answered) return;
+    if (answered || transitioning) return;
 
     if (detection.visible && detection.fingerCount >= 1 && detection.fingerCount <= 4) {
       const optionIndex = detection.fingerCount - 1; // 1 finger = index 0 (A), etc.
@@ -60,6 +61,7 @@ const QuizScreen = () => {
 
     setShowExplanation(true);
 
+    setTransitioning(true);
     setTimeout(() => {
       if (currentQ < questions.length - 1) {
         setCurrentQ((q) => q + 1);
@@ -68,8 +70,10 @@ const QuizScreen = () => {
         setShowExplanation(false);
         setHoveredOption(null);
         lastSelectedRef.current = null;
+        setTransitioning(false);
       } else {
         setShowResult(true);
+        setTransitioning(false);
       }
     }, 3000);
   };
@@ -256,6 +260,21 @@ const QuizScreen = () => {
                 <p className="text-sm font-body text-muted-foreground">
                   💡 {question.explanation}
                 </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Transitioning overlay */}
+          <AnimatePresence>
+            {transitioning && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center justify-center gap-3 py-4"
+              >
+                <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                <span className="font-display text-muted-foreground">Memuat soal berikutnya...</span>
               </motion.div>
             )}
           </AnimatePresence>

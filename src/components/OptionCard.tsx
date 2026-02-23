@@ -45,15 +45,19 @@ const OptionCard = ({
           : { scale: 1 }
       }
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className={`${bgClass} relative rounded-2xl p-6 text-left cursor-pointer option-hover w-full ${
-        isHovered ? "ring-4 ring-foreground/20" : ""
-      }`}
+      className={`${bgClass} relative rounded-2xl p-6 text-left cursor-pointer option-hover w-full border ${
+        state === "default" ? "border-border shadow-sm" : "border-transparent"
+      } ${isHovered ? "ring-4 ring-primary/30" : ""}`}
     >
       <div className="flex items-center gap-4">
-        <span className="flex-shrink-0 w-12 h-12 rounded-xl bg-background/20 flex items-center justify-center text-xl font-display font-bold text-primary-foreground">
+        <span className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl font-display font-bold ${
+          state === "default" ? "bg-primary/10 text-primary" : "bg-background/20 text-primary-foreground"
+        }`}>
           {labels[index]}
         </span>
-        <span className="text-lg font-semibold text-primary-foreground font-body">
+        <span className={`text-lg font-semibold font-body ${
+          state === "default" ? "text-foreground" : "text-primary-foreground"
+        }`}>
           {text}
         </span>
       </div>
