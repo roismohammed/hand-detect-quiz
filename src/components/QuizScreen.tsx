@@ -1,13 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Loader2, Trophy, RotateCcw, Hand, AlertCircle } from "lucide-react";
+import { Camera, Loader2, Trophy, RotateCcw, Hand, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { questions } from "@/data/questions";
 import { useHandDetection } from "@/hooks/useHandDetection";
 import OptionCard from "./OptionCard";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 type OptionState = "default" | "correct" | "wrong";
 
 const FINGER_LABELS = ["", "A", "B", "C", "D"]; // 1-4 fingers
+const STABLE_FRAMES_NEEDED = 5; // Need consistent detection for stability
 
 const QuizScreen = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -19,29 +29,45 @@ const QuizScreen = () => {
   const [hoveredOption, setHoveredOption] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [showExplanation, setShowExplanation] = useState(false);
-  const [transitioning, setTransitioning] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+  const [alertCorrect, setAlertCorrect] = useState(false);
 
   const question = questions[Math.min(currentQ, questions.length - 1)];
 
-  // Detect finger count and select answer
+  // Stable finger detection - require consistent readings
   const lastSelectedRef = useRef<number | null>(null);
+  const stableCountRef = useRef(0);
+  const stableFingerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (answered || transitioning) return;
+    if (answered) return;
 
     if (detection.visible && detection.fingerCount >= 1 && detection.fingerCount <= 4) {
-      const optionIndex = detection.fingerCount - 1; // 1 finger = index 0 (A), etc.
-      setHoveredOption(optionIndex);
+      const optionIndex = detection.fingerCount - 1;
 
-      if (lastSelectedRef.current !== optionIndex) {
+      // Check if same finger count is stable
+      if (stableFingerRef.current === optionIndex) {
+        stableCountRef.current += 1;
+      } else {
+        stableFingerRef.current = optionIndex;
+        stableCountRef.current = 1;
+      }
+
+      // Only show hover after some stability
+      if (stableCountRef.current >= 2) {
+        setHoveredOption(optionIndex);
+      }
+
+      // Only select after STABLE_FRAMES_NEEDED consistent frames
+      if (stableCountRef.current >= STABLE_FRAMES_NEEDED && lastSelectedRef.current !== optionIndex) {
         lastSelectedRef.current = optionIndex;
-        // Small delay to let user see the highlight before selecting
-        setTimeout(() => handleAnswer(optionIndex), 800);
+        handleAnswer(optionIndex);
       }
     } else {
       setHoveredOption(null);
       lastSelectedRef.current = null;
+      stableFingerRef.current = null;
+      stableCountRef.current = 0;
     }
   }, [detection, answered]);
 
@@ -58,24 +84,23 @@ const QuizScreen = () => {
 
     setOptionStates(newStates);
     if (isCorrect) setScore((s) => s + 1);
+    setAlertCorrect(isCorrect);
+    setShowAlert(true);
+  };
 
-    setShowExplanation(true);
-
-    setTransitioning(true);
-    setTimeout(() => {
-      if (currentQ < questions.length - 1) {
-        setCurrentQ((q) => q + 1);
-        setOptionStates(["default", "default", "default", "default"]);
-        setAnswered(false);
-        setShowExplanation(false);
-        setHoveredOption(null);
-        lastSelectedRef.current = null;
-        setTransitioning(false);
-      } else {
-        setShowResult(true);
-        setTransitioning(false);
-      }
-    }, 3000);
+  const handleNextQuestion = () => {
+    setShowAlert(false);
+    if (currentQ < questions.length - 1) {
+      setCurrentQ((q) => q + 1);
+      setOptionStates(["default", "default", "default", "default"]);
+      setAnswered(false);
+      setHoveredOption(null);
+      lastSelectedRef.current = null;
+      stableFingerRef.current = null;
+      stableCountRef.current = 0;
+    } else {
+      setShowResult(true);
+    }
   };
 
   const restart = () => {
@@ -84,9 +109,11 @@ const QuizScreen = () => {
     setOptionStates(["default", "default", "default", "default"]);
     setAnswered(false);
     setShowResult(false);
-    setShowExplanation(false);
+    setShowAlert(false);
     setHoveredOption(null);
     lastSelectedRef.current = null;
+    stableFingerRef.current = null;
+    stableCountRef.current = 0;
   };
 
   if (showResult) {
@@ -175,13 +202,11 @@ const QuizScreen = () => {
             style={{ transform: "scaleX(-1)" }}
           />
 
-          {/* Finger count indicator */}
-          {detection.visible && (
+          {/* Finger count indicator - only show when hand detected */}
+          {detection.visible && detection.fingerCount >= 1 && detection.fingerCount <= 4 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-6 py-3">
               <span className="font-display font-bold text-foreground text-lg">
-                {detection.fingerCount === 0
-                  ? "✊ Kepal"
-                  : `${detection.fingerCount} Jari → ${FINGER_LABELS[detection.fingerCount] || ""}`}
+                {`${detection.fingerCount} Jari → ${FINGER_LABELS[detection.fingerCount] || ""}`}
               </span>
             </div>
           )}
@@ -248,37 +273,6 @@ const QuizScreen = () => {
             ))}
           </div>
 
-          {/* Explanation */}
-          <AnimatePresence>
-            {showExplanation && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="glass-card rounded-2xl p-4"
-              >
-                <p className="text-sm font-body text-muted-foreground">
-                  💡 {question.explanation}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Transitioning overlay */}
-          <AnimatePresence>
-            {transitioning && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center justify-center gap-3 py-4"
-              >
-                <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                <span className="font-display text-muted-foreground">Memuat soal berikutnya...</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           {/* Instructions */}
           <div className="text-center">
             <p className="text-sm text-muted-foreground font-body">
@@ -287,6 +281,41 @@ const QuizScreen = () => {
           </div>
         </div>
       </div>
+
+      {/* Answer Alert Dialog */}
+      <AlertDialog open={showAlert}>
+        <AlertDialogContent className="rounded-3xl">
+          <AlertDialogHeader className="items-center text-center">
+            {alertCorrect ? (
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring" }}>
+                <CheckCircle2 className="w-16 h-16 text-correct mx-auto mb-2" />
+              </motion.div>
+            ) : (
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring" }}>
+                <XCircle className="w-16 h-16 text-wrong mx-auto mb-2" />
+              </motion.div>
+            )}
+            <AlertDialogTitle className="text-2xl font-display">
+              {alertCorrect ? "Jawaban Benar! 🎉" : "Jawaban Salah 😢"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base font-body">
+              {alertCorrect
+                ? "Hebat! Kamu menjawab dengan benar!"
+                : `Jawaban yang benar adalah: ${question.options[question.correctIndex]}`}
+              <br />
+              <span className="text-sm mt-2 block">💡 {question.explanation}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="justify-center">
+            <AlertDialogAction
+              onClick={handleNextQuestion}
+              className="bg-primary text-primary-foreground px-8 py-3 rounded-xl font-display font-semibold"
+            >
+              {currentQ < questions.length - 1 ? "Soal Berikutnya →" : "Lihat Hasil"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
