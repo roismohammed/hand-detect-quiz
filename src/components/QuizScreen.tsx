@@ -202,12 +202,25 @@ const QuizScreen = () => {
             style={{ transform: "scaleX(-1)" }}
           />
 
-          {/* Finger count indicator - only show when hand detected */}
-          {detection.visible && detection.fingerCount >= 1 && detection.fingerCount <= 4 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-6 py-3">
-              <span className="font-display font-bold text-foreground text-lg">
-                {`${detection.fingerCount} Jari → ${FINGER_LABELS[detection.fingerCount] || ""}`}
-              </span>
+          {/* Finger count indicator */}
+          {detection.visible && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-card rounded-full px-6 py-3 flex items-center gap-2">
+              {detection.fingerCount === 0 ? (
+                <>
+                  <Hand className="w-5 h-5 text-muted-foreground" />
+                  <span className="font-display font-bold text-muted-foreground text-lg">
+                    ✊ Tangan Kepal
+                  </span>
+                </>
+              ) : detection.fingerCount >= 1 && detection.fingerCount <= 4 ? (
+                <span className="font-display font-bold text-foreground text-lg">
+                  {`${detection.fingerCount} Jari → ${FINGER_LABELS[detection.fingerCount] || ""}`}
+                </span>
+              ) : (
+                <span className="font-display font-bold text-muted-foreground text-lg">
+                  ✋ {detection.fingerCount} Jari (1-4 untuk jawab)
+                </span>
+              )}
             </div>
           )}
 
