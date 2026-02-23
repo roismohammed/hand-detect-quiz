@@ -22,7 +22,7 @@ const QuizScreen = () => {
   const [showExplanation, setShowExplanation] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
 
-  const question = questions[currentQ];
+  const question = questions[Math.min(currentQ, questions.length - 1)];
 
   // Detect finger count and select answer
   const lastSelectedRef = useRef<number | null>(null);
