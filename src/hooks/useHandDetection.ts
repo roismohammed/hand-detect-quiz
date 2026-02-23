@@ -13,6 +13,20 @@ const FINGER_PIPS = [6, 10, 14, 18];
 
 function countRaisedFingers(landmarks: { x: number; y: number; z: number }[]): number {
   let count = 0;
+
+  // Thumb: compare tip x vs IP joint x (landmark 3)
+  // For right hand: tip.x < ip.x means raised (mirrored camera)
+  // Use absolute distance approach: if thumb tip is far from palm
+  const thumbTip = landmarks[4];
+  const thumbIp = landmarks[3];
+  const wrist = landmarks[0];
+  // Thumb is raised if tip is further from wrist than IP joint
+  const thumbTipDist = Math.abs(thumbTip.x - wrist.x);
+  const thumbIpDist = Math.abs(thumbIp.x - wrist.x);
+  if (thumbTipDist > thumbIpDist) {
+    count++;
+  }
+
   // For index, middle, ring, pinky: tip y < pip y means raised (y goes down)
   for (let i = 0; i < FINGER_TIPS.length; i++) {
     if (landmarks[FINGER_TIPS[i]].y < landmarks[FINGER_PIPS[i]].y) {
