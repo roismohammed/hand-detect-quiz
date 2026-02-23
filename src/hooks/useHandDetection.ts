@@ -54,9 +54,9 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
 
         hands.setOptions({
           maxNumHands: 1,
-          modelComplexity: 0,
-          minDetectionConfidence: 0.6,
-          minTrackingConfidence: 0.5,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.8,
+          minTrackingConfidence: 0.7,
         });
 
         hands.onResults(onResults);
