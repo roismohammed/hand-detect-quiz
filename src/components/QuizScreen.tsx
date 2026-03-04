@@ -4,6 +4,7 @@ import { Camera, Loader2, Trophy, RotateCcw, Hand, AlertCircle, CheckCircle2, XC
 import { questions } from "@/data/questions";
 import { useHandDetection } from "@/hooks/useHandDetection";
 import OptionCard from "./OptionCard";
+import { playCorrectSound, playWrongSound } from "@/utils/sounds";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -31,6 +32,7 @@ const QuizScreen = () => {
   const [showResult, setShowResult] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
   const [alertCorrect, setAlertCorrect] = useState(false);
+  const [countdown, setCountdown] = useState(3);
 
   const question = questions[Math.min(currentQ, questions.length - 1)];
 
@@ -38,6 +40,20 @@ const QuizScreen = () => {
   const lastSelectedRef = useRef<number | null>(null);
   const stableCountRef = useRef(0);
   const stableFingerRef = useRef<number | null>(null);
+
+  // Auto-advance after 3 seconds when alert is shown
+  useEffect(() => {
+    if (!showAlert) {
+      setCountdown(3);
+      return;
+    }
+    if (countdown <= 0) {
+      handleNextQuestion();
+      return;
+    }
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [showAlert, countdown]);
 
   useEffect(() => {
     if (answered) return;
@@ -83,7 +99,12 @@ const QuizScreen = () => {
     });
 
     setOptionStates(newStates);
-    if (isCorrect) setScore((s) => s + 1);
+    if (isCorrect) {
+      setScore((s) => s + 1);
+      playCorrectSound();
+    } else {
+      playWrongSound();
+    }
     setAlertCorrect(isCorrect);
     setShowAlert(true);
   };
@@ -324,7 +345,7 @@ const QuizScreen = () => {
               onClick={handleNextQuestion}
               className="bg-primary text-primary-foreground px-8 py-3 rounded-xl font-display font-semibold"
             >
-              {currentQ < questions.length - 1 ? "Soal Berikutnya →" : "Lihat Hasil"}
+              {currentQ < questions.length - 1 ? `Soal Berikutnya (${countdown}s)` : `Lihat Hasil (${countdown}s)`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

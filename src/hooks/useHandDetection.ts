@@ -1,25 +1,35 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Hands, Results } from "@mediapipe/hands";
-import { Camera } from "@mediapipe/camera_utils";
 
 export interface HandDetectionResult {
-  fingerCount: number; // 0-5
+  fingerCount: number;
   visible: boolean;
 }
 
-// Finger tip and PIP landmark indices
-const FINGER_TIPS = [8, 12, 16, 20]; // index, middle, ring, pinky
+const FINGER_TIPS = [8, 12, 16, 20];
 const FINGER_PIPS = [6, 10, 14, 18];
 
 function countRaisedFingers(landmarks: { x: number; y: number; z: number }[]): number {
   let count = 0;
-  // For index, middle, ring, pinky: tip y < pip y means raised (y goes down)
   for (let i = 0; i < FINGER_TIPS.length; i++) {
     if (landmarks[FINGER_TIPS[i]].y < landmarks[FINGER_PIPS[i]].y) {
       count++;
     }
   }
   return count;
+}
+
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = src;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
 }
 
 export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
@@ -29,10 +39,12 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const handsRef = useRef<Hands | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const handsRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
+  const mountedRef = useRef(true);
 
-  const onResults = useCallback((results: Results) => {
+  const onResults = useCallback((results: any) => {
+    if (!mountedRef.current) return;
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
       const fingerCount = countRaisedFingers(landmarks);
@@ -43,12 +55,22 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     if (!videoRef.current) return;
 
     const initHands = async () => {
       try {
-        const hands = new Hands({
-          locateFile: (file) =>
+        // Load MediaPipe scripts from CDN
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js");
+
+        const win = window as any;
+        if (!win.Hands || !win.Camera) {
+          throw new Error("MediaPipe failed to load");
+        }
+
+        const hands = new win.Hands({
+          locateFile: (file: string) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
 
@@ -62,7 +84,7 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
         hands.onResults(onResults);
         handsRef.current = hands;
 
-        const camera = new Camera(videoRef.current!, {
+        const camera = new win.Camera(videoRef.current!, {
           onFrame: async () => {
             if (handsRef.current && videoRef.current) {
               await handsRef.current.send({ image: videoRef.current });
@@ -74,17 +96,20 @@ export function useHandDetection(videoRef: React.RefObject<HTMLVideoElement>) {
 
         cameraRef.current = camera;
         await camera.start();
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       } catch (err) {
         console.error("Hand detection error:", err);
-        setError("Gagal memulai kamera. Pastikan kamera diizinkan.");
-        setIsLoading(false);
+        if (mountedRef.current) {
+          setError("Gagal memulai kamera. Pastikan kamera diizinkan.");
+          setIsLoading(false);
+        }
       }
     };
 
     initHands();
 
     return () => {
+      mountedRef.current = false;
       cameraRef.current?.stop();
       handsRef.current?.close();
     };
