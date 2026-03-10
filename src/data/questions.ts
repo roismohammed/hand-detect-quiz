@@ -38,7 +38,7 @@ export const questions: Question[] = [
   {
     id: 5,
     question: "Hewan apa yang merupakan mamalia terbesar?",
-    options: ["Gajah", "Jerapah", "Paus Biru", "Hiu Paus"],
+    options: ["Singa", "Jerapah", "Paus Biru", "Hiu Paus"],
     correctIndex: 2,
     explanation: "Paus Biru adalah mamalia terbesar yang pernah hidup di bumi.",
   },
