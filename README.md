@@ -1,4 +1,4 @@
-# Welcome to your next project
+# Welcome to your next quiz project
 
 ## Project info
 
